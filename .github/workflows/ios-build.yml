@@ -80,7 +80,7 @@ jobs:
           BUILD_NAME: ${{ inputs.build_name }}
           BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
-          ./flutter/build_ios.sh \
+          bash ./flutter/build_ios.sh \
             --build-name "${BUILD_NAME}" \
             --build-number "${BUILD_NUMBER}"
 
