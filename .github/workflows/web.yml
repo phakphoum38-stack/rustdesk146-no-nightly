@@ -76,6 +76,18 @@ jobs:
           name: rustdesk-${{ env.VERSION }}-web-site
           path: web/dist/
 
+      - name: Select GitHub Actions as Pages source
+        if: ${{ inputs.deploy_pages }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/pages" >/dev/null 2>&1; then
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow
+          fi
+
       - name: Configure GitHub Pages
         if: ${{ inputs.deploy_pages }}
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
