@@ -33,13 +33,13 @@ RustDesk welcomes contribution from everyone. See [CONTRIBUTING.md](docs/CONTRIB
 
 Open **Actions → Build Installers for Supported Platforms → Run workflow** and
 enter a release tag such as `v1.4.9-custom`. The workflow uses the native runner
-for each target and builds the supported Windows, macOS, Linux, Android, iOS,
-and web outputs in parallel.
+for each target and builds the supported Windows, macOS, Linux, Android, and
+iOS outputs in parallel.
 
 The release pipeline covers Windows x64/ARM64 plus the legacy x86 package,
 macOS x86_64/Apple Silicon DMGs, Linux packages including AppImage and Flatpak,
-per-architecture and universal Android APKs, and the web bundle. The unsigned
-iOS archive is retained as a workflow artifact; installing it on a normal
+and per-architecture and universal Android APKs. The unsigned iOS archive is
+retained as a workflow artifact; installing it on a normal
 iPhone or iPad still requires Apple code signing and a provisioning profile.
 
 Android and macOS signing secrets are optional. When they are absent, the
