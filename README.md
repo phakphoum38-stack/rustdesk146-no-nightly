@@ -34,7 +34,14 @@ RustDesk welcomes contribution from everyone. See [CONTRIBUTING.md](docs/CONTRIB
 Open **Actions → Build Installers for Supported Platforms → Run workflow** and
 enter a release tag such as `v1.4.9-custom`. The workflow uses the native runner
 for each target and builds the supported Windows, macOS, Linux, Android, and
-iOS outputs in parallel.
+iOS outputs in parallel. It also builds the standalone web download portal and
+experimental Remote Lab archive from `web/`.
+
+For a web-only build and GitHub Pages deployment, run **Build and Deploy Web
+Portal**. The Downloads view is ready for end users. Remote Lab is an
+experimental relay client and requires a WSS proxy when hosted over HTTPS; see
+[`web/README.md`](web/README.md) for the supported browser features and server
+requirements.
 
 The release pipeline covers Windows x64/ARM64 plus the legacy x86 package,
 macOS x86_64/Apple Silicon DMGs, Linux packages including AppImage and Flatpak,
@@ -203,7 +210,7 @@ Please ensure that you run these commands from the root of the RustDesk reposito
 - **[src/rendezvous_mediator.rs](https://github.com/rustdesk/rustdesk/tree/master/src/rendezvous_mediator.rs)**: Communicate with [rustdesk-server](https://github.com/rustdesk/rustdesk-server), wait for remote direct (TCP hole punching) or relayed connection
 - **[src/platform](https://github.com/rustdesk/rustdesk/tree/master/src/platform)**: platform specific code
 - **[flutter](https://github.com/rustdesk/rustdesk/tree/master/flutter)**: Flutter code for desktop and mobile
-- **[flutter/web/js](https://github.com/rustdesk/rustdesk/tree/master/flutter/web/v1/js)**: JavaScript for Flutter web client
+- **[web](web)**: standalone download portal and experimental browser remote client
 
 ## Screenshots
 

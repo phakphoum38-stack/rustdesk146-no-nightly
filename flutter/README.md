@@ -40,8 +40,9 @@ Visual Studio installation.
 
 Desktop packages are native to their build host. To build Windows, macOS,
 Linux, Android, iOS, and web outputs together, run **Build Installers for
-Supported Platforms** in GitHub Actions. iOS distribution additionally needs
-an Apple signing identity and provisioning profile.
+Supported Platforms** in GitHub Actions. The web implementation is a standalone
+Vite application under `web/`, not a Flutter platform target. iOS distribution
+additionally needs an Apple signing identity and provisioning profile.
 
 Generated bridge files include `flutter/lib/generated_bridge.dart`, Rust files
 under `src/`, and `bridge_generated.h` under both `flutter/macos/Runner` and
