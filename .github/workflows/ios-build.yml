@@ -6,12 +6,12 @@ on:
       build_name:
         description: App version shown to users
         required: true
-        default: "1.4.5"
+        default: "1.4.9"
         type: string
       build_number:
         description: Internal iOS build number
         required: true
-        default: "63"
+        default: "67"
         type: string
 
 permissions:
