@@ -29,6 +29,41 @@ RustDesk welcomes contribution from everyone. See [CONTRIBUTING.md](docs/CONTRIB
 
 [**NIGHTLY BUILD**](https://github.com/rustdesk/rustdesk/releases/tag/nightly)
 
+## Build installable packages for every supported platform
+
+Open **Actions → Build Installers for Supported Platforms → Run workflow** and
+enter a release tag such as `v1.4.9-custom`. The workflow uses the native runner
+for each target and builds the supported Windows, macOS, Linux, Android, iOS,
+and web outputs in parallel.
+
+The release pipeline covers Windows x64/ARM64 plus the legacy x86 package,
+macOS x86_64/Apple Silicon DMGs, Linux packages including AppImage and Flatpak,
+per-architecture and universal Android APKs, and the web bundle. The unsigned
+iOS archive is retained as a workflow artifact; installing it on a normal
+iPhone or iPad still requires Apple code signing and a provisioning profile.
+
+Android and macOS signing secrets are optional. When they are absent, the
+workflow keeps the unsigned artifacts instead of attempting to sign with empty
+credentials. Configure the repository signing secrets before producing a
+store-ready Android, macOS, or iOS release.
+
+For a local build of the current host platform, use:
+
+```powershell
+# Windows PowerShell
+.\scripts\setup_build_tools.ps1 -PersistUserEnvironment
+.\scripts\full_build.ps1
+```
+
+```bash
+# Linux or macOS
+export VCPKG_ROOT=/path/to/vcpkg
+bash ./scripts/full_build.sh
+```
+
+Desktop packages must be built on their target operating system. The GitHub
+Actions workflow is the supported way to produce every platform in one run.
+
 [<img src="https://f-droid.org/badge/get-it-on.png"
     alt="Get it on F-Droid"
     height="80">](https://f-droid.org/en/packages/com.carriez.flutter_hbb)

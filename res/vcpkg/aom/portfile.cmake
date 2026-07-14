@@ -17,6 +17,7 @@ if(DEFINED ENV{USE_AOM_391})
             aom-uninitialized-pointer.diff
             aom-avx2.diff
             aom-install.diff
+            aom-nasm-3.diff
     )
 else()
     vcpkg_from_git(
@@ -28,6 +29,7 @@ else()
             # aom-avx2.diff
             # Can be dropped when https://bugs.chromium.org/p/aomedia/issues/detail?id=3029 is merged into the upstream
             aom-install.diff
+            aom-nasm-3.diff
     )
 endif()
 
