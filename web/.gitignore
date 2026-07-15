@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.cache/
+public/ogvjs-*/
+public/yuv-canvas-*.js
+public/libopus.js
+public/libopus.wasm
+!public/icon.png
+src/message.ts
+src/rendezvous.ts
+*.log
+.DS_Store

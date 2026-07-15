@@ -1,449 +1,114 @@
-name: Build RustDesk iOS IPA
+name: Build iOS
 
 on:
   workflow_dispatch:
     inputs:
-      upload-artifact:
-        description: Upload IPA to GitHub Actions Artifacts
-        required: false
-        type: boolean
-        default: true
-
-      publish-release:
-        description: Publish IPA to GitHub Release
-        required: false
-        type: boolean
-        default: false
-
-      upload-tag:
-        description: GitHub release tag
-        required: false
+      build_name:
+        description: App version shown to users
+        required: true
+        default: "1.4.9"
         type: string
-        default: nightly-ios
-
-  push:
-    branches:
-      - master
-      - main
-    paths:
-      - "flutter/**"
-      - "src/**"
-      - "libs/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "vcpkg.json"
-      - ".github/workflows/build-ios.yml"
-      - ".github/workflows/bridge.yml"
-      - ".github/patches/**"
+      build_number:
+        description: Internal iOS build number
+        required: true
+        default: "67"
+        type: string
 
 permissions:
-  contents: write
-  actions: read
+  contents: read
 
 concurrency:
-  group: rustdesk-ios-${{ github.ref }}
+  group: ios-build-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   FLUTTER_VERSION: "3.24.5"
-  RUST_VERSION: "1.75"
-  VERSION: "1.4.9"
-
-  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  RUST_TOOLCHAIN: "1.75"
   VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
-
-  IOS_RUST_TARGET: "aarch64-apple-ios"
-  IOS_VCPKG_TRIPLET: "arm64-ios"
-
-  CARGO_INCREMENTAL: "0"
-  RUST_BACKTRACE: "1"
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
 jobs:
-  generate-bridge:
-    name: Generate Flutter Rust Bridge
-    uses: ./.github/workflows/bridge.yml
-    secrets: inherit
-
-  build-rustdesk-ios:
-    name: Build RustDesk iOS unsigned IPA
-    runs-on: macos-14
-
-    needs:
-      - generate-bridge
-
+  build-ios:
+    name: Build unsigned iOS archive and IPA
+    runs-on: macos-latest
     timeout-minutes: 180
 
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 1
-
       - name: Export GitHub Actions cache variables
-        uses: actions/github-script@v7
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
         with:
           script: |
-            core.exportVariable(
-              'ACTIONS_CACHE_URL',
-              process.env.ACTIONS_CACHE_URL || ''
-            );
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-            core.exportVariable(
-              'ACTIONS_RUNTIME_TOKEN',
-              process.env.ACTIONS_RUNTIME_TOKEN || ''
-            );
+      - name: Check out source and submodules
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
 
-      - name: Show runner information
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          sw_vers
-          uname -a
-          xcodebuild -version
-          xcrun --sdk iphoneos --show-sdk-version
-          python3 --version
-
-      - name: Install macOS dependencies
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          brew update
-
-          brew install \
-            nasm \
-            yasm \
-            pkg-config \
-            cmake \
-            ninja
-
-          nasm -v
-          yasm --version
-          cmake --version
-          ninja --version
-          pod --version
+      - name: Install native build tools
+        run: brew install nasm yasm
 
       - name: Install Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
-      - name: Show Flutter information
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          flutter --version
-          flutter doctor -v
-          flutter config --enable-ios
-          flutter precache --ios
-
-      - name: Patch Flutter
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          FLUTTER_ROOT="$(dirname "$(dirname "$(which flutter)")")"
-          PATCH_FILE="${GITHUB_WORKSPACE}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff"
-
-          echo "Flutter root: ${FLUTTER_ROOT}"
-          echo "Patch file: ${PATCH_FILE}"
-
-          if [[ "${FLUTTER_VERSION}" == "3.24.5" ]] && [[ -f "${PATCH_FILE}" ]]; then
-            cd "${FLUTTER_ROOT}"
-
-            if git apply --check "${PATCH_FILE}"; then
-              git apply "${PATCH_FILE}"
-              echo "Flutter patch applied."
-            elif git apply --reverse --check "${PATCH_FILE}"; then
-              echo "Flutter patch is already applied."
-            else
-              echo "Flutter patch cannot be applied."
-              exit 1
-            fi
-          else
-            echo "Flutter patch is not required or patch file is missing."
-          fi
-
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
-          toolchain: ${{ env.RUST_VERSION }}
-          targets: ${{ env.IOS_RUST_TARGET }}
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: aarch64-apple-ios
           components: rustfmt
 
-      - name: Show Rust information
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          rustup show
-          rustc --version
-          cargo --version
-          rustup target add "${IOS_RUST_TARGET}"
-
-      - name: Restore Rust cache
-        uses: Swatinem/rust-cache@v2
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           prefix-key: rustdesk-ios
-          key: ${{ env.IOS_RUST_TARGET }}
-          cache-on-failure: true
+          key: aarch64-apple-ios
 
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
         with:
-          vcpkgDirectory: ${{ github.workspace }}/vcpkg
           vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
           doNotCache: false
 
-      - name: Install iOS vcpkg dependencies
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          echo "VCPKG_ROOT=${VCPKG_ROOT}"
-
-          if ! "${VCPKG_ROOT}/vcpkg" install \
-            --triplet "${IOS_VCPKG_TRIPLET}" \
-            --x-install-root="${VCPKG_ROOT}/installed"; then
-
-            echo "vcpkg installation failed."
-
-            find "${VCPKG_ROOT}" \
-              -type f \
-              \( -name "*.log" -o -name "*out.log" -o -name "*err.log" \) \
-              -print \
-              -exec sh -c 'echo "===== $1 ====="; tail -n 300 "$1"' _ {} \;
-
-            exit 1
-          fi
-
-          "${VCPKG_ROOT}/vcpkg" list
-
-      - name: Restore generated bridge files
-        uses: actions/download-artifact@v4
-        with:
-          name: bridge-artifact
-          path: ./
-
-      - name: Verify project structure
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          test -f Cargo.toml
-          test -f flutter/pubspec.yaml
-          test -d flutter/ios
-
-          echo "Root files:"
-          ls -la
-
-          echo "Flutter directory:"
-          ls -la flutter
-
-          echo "iOS directory:"
-          ls -la flutter/ios
-
-      - name: Build Rust static library for iOS
-        shell: bash
+      - name: Build iOS archive
         env:
-          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+          BUILD_NAME: ${{ inputs.build_name }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
         run: |
-          set -euxo pipefail
+          bash ./flutter/build_ios.sh \
+            --build-name "${BUILD_NAME}" \
+            --build-number "${BUILD_NUMBER}"
 
-          rustup target add "${IOS_RUST_TARGET}"
-
-          cargo build \
-            --features flutter,hwcodec \
-            --release \
-            --target "${IOS_RUST_TARGET}" \
-            --lib
-
-          RUST_LIBRARY="target/${IOS_RUST_TARGET}/release/liblibrustdesk.a"
-
-          if [[ ! -f "${RUST_LIBRARY}" ]]; then
-            echo "Rust static library was not created."
-            find target -maxdepth 5 -type f -print || true
-            exit 1
-          fi
-
-          ls -lh "${RUST_LIBRARY}"
-          file "${RUST_LIBRARY}"
-
-      - name: Copy Rust library into Flutter iOS project
-        shell: bash
+      - name: Package unsigned iOS IPA
+        env:
+          IPA_NAME: rustdesk-${{ inputs.build_name }}-${{ inputs.build_number }}-unsigned.ipa
         run: |
-          set -euxo pipefail
+          APP_PATH="flutter/build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app"
+          IPA_DIR="flutter/build/ios/ipa"
+          PACKAGE_ROOT="${RUNNER_TEMP}/rustdesk-ipa"
 
-          RUST_LIBRARY="target/${IOS_RUST_TARGET}/release/liblibrustdesk.a"
+          test -d "${APP_PATH}"
+          mkdir -p "${PACKAGE_ROOT}/Payload" "${IPA_DIR}"
+          ditto "${APP_PATH}" "${PACKAGE_ROOT}/Payload/Runner.app"
+          (
+            cd "${PACKAGE_ROOT}"
+            /usr/bin/zip -qry "${GITHUB_WORKSPACE}/${IPA_DIR}/${IPA_NAME}" Payload
+          )
+          test -s "${IPA_DIR}/${IPA_NAME}"
 
-          mkdir -p flutter/ios/Runner
-
-          cp \
-            "${RUST_LIBRARY}" \
-            flutter/ios/Runner/liblibrustdesk.a
-
-          ls -lh flutter/ios/Runner/liblibrustdesk.a
-          file flutter/ios/Runner/liblibrustdesk.a
-
-      - name: Install Flutter packages
-        working-directory: flutter
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          flutter clean
-          flutter pub get
-          flutter precache --ios
-
-      - name: Install CocoaPods dependencies
-        working-directory: flutter/ios
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          if [[ ! -f "Podfile" ]]; then
-            echo "Podfile not found in flutter/ios."
-            ls -la
-            exit 1
-          fi
-
-          pod repo update
-          pod install --repo-update
-
-          test -d Runner.xcworkspace
-          ls -la Runner.xcworkspace
-
-      - name: Disable iOS code signing
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          PROJECT_FILE="flutter/ios/Runner.xcodeproj/project.pbxproj"
-
-          if [[ ! -f "${PROJECT_FILE}" ]]; then
-            echo "Xcode project file not found: ${PROJECT_FILE}"
-            exit 1
-          fi
-
-          sed -i '' \
-            's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' \
-            "${PROJECT_FILE}" || true
-
-          sed -i '' \
-            's/CODE_SIGNING_REQUIRED = YES;/CODE_SIGNING_REQUIRED = NO;/g' \
-            "${PROJECT_FILE}" || true
-
-          sed -i '' \
-            's/CODE_SIGNING_ALLOWED = YES;/CODE_SIGNING_ALLOWED = NO;/g' \
-            "${PROJECT_FILE}" || true
-
-      - name: Build unsigned iOS application
-        working-directory: flutter
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          flutter build ios \
-            --release \
-            --no-codesign
-
-          APP_PATH="build/ios/iphoneos/Runner.app"
-
-          if [[ ! -d "${APP_PATH}" ]]; then
-            echo "Runner.app was not created."
-
-            find build/ios \
-              -maxdepth 6 \
-              -type d \
-              -name "*.app" \
-              -print || true
-
-            exit 1
-          fi
-
-          ls -la "${APP_PATH}"
-
-      - name: Create unsigned IPA
-        working-directory: flutter
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          APP_PATH="build/ios/iphoneos/Runner.app"
-          OUTPUT_DIRECTORY="build/ios/ipa"
-          PAYLOAD_DIRECTORY="${OUTPUT_DIRECTORY}/Payload"
-          IPA_FILE="${OUTPUT_DIRECTORY}/rustdesk-${VERSION}-ios-unsigned.ipa"
-
-          rm -rf "${OUTPUT_DIRECTORY}"
-          mkdir -p "${PAYLOAD_DIRECTORY}"
-
-          cp -R "${APP_PATH}" "${PAYLOAD_DIRECTORY}/RustDesk.app"
-
-          pushd "${OUTPUT_DIRECTORY}"
-          zip -qry "$(basename "${IPA_FILE}")" Payload
-          popd
-
-          if [[ ! -f "${IPA_FILE}" ]]; then
-            echo "Unsigned IPA was not created."
-            exit 1
-          fi
-
-          ls -lh "${IPA_FILE}"
-          shasum -a 256 "${IPA_FILE}" | tee "${IPA_FILE}.sha256"
-
-      - name: Show iOS build output
-        if: always()
-        shell: bash
-        run: |
-          echo "Rust build files:"
-          find "target/${IOS_RUST_TARGET}/release" \
-            -maxdepth 2 \
-            -type f \
-            -print 2>/dev/null || true
-
-          echo "Flutter iOS build files:"
-          find flutter/build/ios \
-            -maxdepth 6 \
-            -type f \
-            -print 2>/dev/null || true
-
-      - name: Upload Rust iOS static library
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.upload-artifact }}
-        uses: actions/upload-artifact@v4
+      - name: Upload unsigned iOS artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: rustdesk-${{ env.VERSION }}-ios-static-library
-          path: target/${{ env.IOS_RUST_TARGET }}/release/liblibrustdesk.a
+          name: rustdesk-ios-unsigned-${{ github.run_number }}
           if-no-files-found: error
           retention-days: 14
-          compression-level: 6
-
-      - name: Upload unsigned IPA
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.upload-artifact }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: rustdesk-${{ env.VERSION }}-ios-unsigned
           path: |
             flutter/build/ios/ipa/*.ipa
-            flutter/build/ios/ipa/*.sha256
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
-
-      - name: Publish unsigned IPA to GitHub Release
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish-release }}
-        uses: softprops/action-gh-release@v2
-        with:
-          prerelease: true
-          draft: false
-          generate_release_notes: false
-          tag_name: ${{ inputs.upload-tag }}
-          name: RustDesk ${{ env.VERSION }} iOS unsigned
-          files: |
-            flutter/build/ios/ipa/*.ipa
-            flutter/build/ios/ipa/*.sha256
-          fail_on_unmatched_files: true
+            flutter/build/ios/archive/
+            flutter/build/ios/iphoneos/
+            target/aarch64-apple-ios/release/liblibrustdesk.a
