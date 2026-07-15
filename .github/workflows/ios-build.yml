@@ -28,69 +28,280 @@ env:
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
 jobs:
-  build-ios:
-    name: Build unsigned iOS archive
-    runs-on: macos-latest
-    timeout-minutes: 180
+  build-rustdesk-ios:
 
-    steps:
-      - name: Export GitHub Actions cache variables
-        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+  name: Build RustDesk iOS IPA
 
-      - name: Check out source and submodules
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          submodules: recursive
+  runs-on: macos-14
 
-      - name: Install native build tools
-        run: brew install nasm yasm
+  needs:
 
-      - name: Install Flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          channel: stable
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
+    - generate-bridge
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
-        with:
-          toolchain: ${{ env.RUST_TOOLCHAIN }}
-          targets: aarch64-apple-ios
-          components: rustfmt
+  steps:
 
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          prefix-key: rustdesk-ios
-          key: aarch64-apple-ios
+    - name: Export GitHub Actions cache variables
 
-      - name: Set up vcpkg
-        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
-        with:
-          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
-          doNotCache: false
+      uses: actions/github-script@v7
 
-      - name: Build iOS archive
-        env:
-          BUILD_NAME: ${{ inputs.build_name }}
-          BUILD_NUMBER: ${{ inputs.build_number }}
-        run: |
-          bash ./flutter/build_ios.sh \
-            --build-name "${BUILD_NAME}" \
-            --build-number "${BUILD_NUMBER}"
+      with:
 
-      - name: Upload unsigned iOS artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: rustdesk-ios-unsigned-${{ github.run_number }}
-          if-no-files-found: error
-          retention-days: 14
-          path: |
-            flutter/build/ios/archive/
-            flutter/build/ios/iphoneos/
-            target/aarch64-apple-ios/release/liblibrustdesk.a
+        script: |
+
+          core.exportVariable(
+
+            'ACTIONS_CACHE_URL',
+
+            process.env.ACTIONS_CACHE_URL || ''
+
+          );
+
+          core.exportVariable(
+
+            'ACTIONS_RUNTIME_TOKEN',
+
+            process.env.ACTIONS_RUNTIME_TOKEN || ''
+
+          );
+
+    - name: Checkout source code
+
+      uses: actions/checkout@v4
+
+      with:
+
+        submodules: recursive
+
+    - name: Install dependencies
+
+      run: |
+
+        brew install nasm yasm
+
+        pod --version
+
+        xcodebuild -version
+
+    - name: Install Flutter
+
+      uses: subosito/flutter-action@v2
+
+      with:
+
+        channel: stable
+
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+
+        cache: true
+
+    - name: Patch Flutter
+
+      shell: bash
+
+      run: |
+
+        FLUTTER_ROOT="$(dirname "$(dirname "$(which flutter)")")"
+
+        if [[ "${{ env.FLUTTER_VERSION }}" == "3.24.5" ]]; then
+
+          cd "$FLUTTER_ROOT"
+
+          git apply \
+
+            "${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff"
+
+        fi
+
+    - name: Install Rust toolchain
+
+      uses: dtolnay/rust-toolchain@v1
+
+      with:
+
+        toolchain: ${{ env.RUST_VERSION }}
+
+        targets: aarch64-apple-ios
+
+        components: rustfmt
+
+    - name: Restore Rust cache
+
+      uses: Swatinem/rust-cache@v2
+
+      with:
+
+        prefix-key: rustdesk-ios
+
+        key: aarch64-apple-ios
+
+    - name: Setup vcpkg
+
+      uses: lukka/run-vcpkg@v11
+
+      with:
+
+        vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+
+        doNotCache: false
+
+    - name: Install iOS vcpkg dependencies
+
+      shell: bash
+
+      run: |
+
+        if ! "$VCPKG_ROOT/vcpkg" install \
+
+          --triplet arm64-ios \
+
+          --x-install-root="$VCPKG_ROOT/installed"; then
+
+          find "$VCPKG_ROOT" -name "*.log" -print -exec cat {} \;
+
+          exit 1
+
+        fi
+
+    - name: Restore bridge files
+
+      uses: actions/download-artifact@v4
+
+      with:
+
+        name: bridge-artifact
+
+        path: ./
+
+    - name: Build Rust static library
+
+      shell: bash
+
+      run: |
+
+        rustup target add aarch64-apple-ios
+
+        cargo build \
+
+          --features flutter,hwcodec \
+
+          --release \
+
+          --target aarch64-apple-ios \
+
+          --lib
+
+        test -f \
+
+          target/aarch64-apple-ios/release/liblibrustdesk.a
+
+    - name: Copy Rust library into iOS project
+
+      shell: bash
+
+      run: |
+
+        mkdir -p flutter/ios/Runner
+
+        cp \
+
+          target/aarch64-apple-ios/release/liblibrustdesk.a \
+
+          flutter/ios/Runner/liblibrustdesk.a
+
+        ls -lh flutter/ios/Runner/liblibrustdesk.a
+
+    - name: Install Flutter packages
+
+      working-directory: flutter
+
+      run: |
+
+        flutter doctor -v
+
+        flutter pub get
+
+        flutter precache --ios
+
+    - name: Install CocoaPods
+
+      working-directory: flutter/ios
+
+      shell: bash
+
+      run: |
+
+        pod install --repo-update
+
+    - name: Build unsigned IPA
+
+      working-directory: flutter
+
+      shell: bash
+
+      run: |
+
+        flutter build ipa \
+
+          --release \
+
+          --no-codesign
+
+    - name: Show iOS output
+
+      shell: bash
+
+      run: |
+
+        find flutter/build/ios \
+
+          -maxdepth 4 \
+
+          -type f \
+
+          -print
+
+    - name: Upload Rust iOS library
+
+      uses: actions/upload-artifact@v4
+
+      with:
+
+        name: rustdesk-ios-static-library
+
+        path: |
+
+          target/aarch64-apple-ios/release/liblibrustdesk.a
+
+        if-no-files-found: error
+
+    - name: Upload unsigned IPA
+
+      uses: actions/upload-artifact@v4
+
+      with:
+
+        name: rustdesk-${{ env.VERSION }}-ios-unsigned
+
+        path: |
+
+          flutter/build/ios/ipa/*.ipa
+
+        if-no-files-found: error
+
+        retention-days: 14
+
+    - name: Publish unsigned IPA
+
+      if: env.UPLOAD_ARTIFACT == 'true'
+
+      uses: softprops/action-gh-release@v2
+
+      with:
+
+        prerelease: true
+
+        tag_name: ${{ env.TAG_NAME }}
+
+        files: |
+
+          flutter/build/ios/ipa/*.ipa
