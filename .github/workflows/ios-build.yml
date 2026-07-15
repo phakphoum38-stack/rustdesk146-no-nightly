@@ -29,7 +29,7 @@ env:
 
 jobs:
   build-ios:
-    name: Build unsigned iOS archive
+    name: Build unsigned iOS archive and IPA
     runs-on: macos-latest
     timeout-minutes: 180
 
@@ -84,6 +84,23 @@ jobs:
             --build-name "${BUILD_NAME}" \
             --build-number "${BUILD_NUMBER}"
 
+      - name: Package unsigned iOS IPA
+        env:
+          IPA_NAME: rustdesk-${{ inputs.build_name }}-${{ inputs.build_number }}-unsigned.ipa
+        run: |
+          APP_PATH="flutter/build/ios/iphoneos/Runner.app"
+          IPA_DIR="flutter/build/ios/ipa"
+          PACKAGE_ROOT="${RUNNER_TEMP}/rustdesk-ipa"
+
+          test -d "${APP_PATH}"
+          mkdir -p "${PACKAGE_ROOT}/Payload" "${IPA_DIR}"
+          ditto "${APP_PATH}" "${PACKAGE_ROOT}/Payload/Runner.app"
+          (
+            cd "${PACKAGE_ROOT}"
+            /usr/bin/zip -qry "${GITHUB_WORKSPACE}/${IPA_DIR}/${IPA_NAME}" Payload
+          )
+          test -s "${IPA_DIR}/${IPA_NAME}"
+
       - name: Upload unsigned iOS artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -91,6 +108,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: |
+            flutter/build/ios/ipa/*.ipa
             flutter/build/ios/archive/
             flutter/build/ios/iphoneos/
             target/aarch64-apple-ios/release/liblibrustdesk.a
