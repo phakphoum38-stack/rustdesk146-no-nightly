@@ -88,7 +88,7 @@ jobs:
         env:
           IPA_NAME: rustdesk-${{ inputs.build_name }}-${{ inputs.build_number }}-unsigned.ipa
         run: |
-          APP_PATH="flutter/build/ios/iphoneos/Runner.app"
+          APP_PATH="flutter/build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app"
           IPA_DIR="flutter/build/ios/ipa"
           PACKAGE_ROOT="${RUNNER_TEMP}/rustdesk-ipa"
 
